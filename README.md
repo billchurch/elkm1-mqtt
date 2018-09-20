@@ -53,6 +53,7 @@ npm start
 - Subscribe to some topics to send commands to the Elk M1 EXP (arm alarm, disarm alarm, say command)
 - Publish configuration topic (zone names, areas, etc...)
 - What else
+- Bypass M1EXP and do utilize direct serial
 
 ## Changelog & Releases
 
