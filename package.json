@@ -1,0 +1,31 @@
+{
+  "name": "elkm1-mqtt",
+  "version": "0.0.1",
+  "description": "MQTT interface for Elk M1 Gold Alarm Platform",
+  "main": "index.js",
+  "scripts": {
+    "start": "node -r dotenv/config index.js dotenv_config_path=./.env"
+  },
+  "author": "Bill Church",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/billchurch/elkm1-mqtt.git"
+  },
+  "keywords": [
+    "elkm1"
+  ],
+  "bugs": {
+    "url": "https://github.com/billchurch/elkm1-mqtt/issues"
+  },
+  "homepage": "https://github.com/billchurch/elkm1-mqtt#readme",
+  "dependencies": {
+    "debug": "^4.0.1",
+    "dotenv": "^6.0.0",
+    "elkington": "git+https://github.com/billchurch/elkington.git",
+    "mqtt": "^2.18.8"
+  },
+  "devDependencies": {
+    "supports-color": "^5.5.0"
+  }
+}
