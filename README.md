@@ -71,7 +71,7 @@ based on the following:
 
 ## Acknoledgements
 Ths MQTT code was mostly lifted from [Jeremy Bunting's][qbunt] [ambient-mqtt] app
-The module for the elkington code is currently being pulled from [my branch][bill-elkington] instead of [Kevin Ohara's][kevinohara80] [offcial elkington repository][elkington] due to some enhancements and fixes that i've not yet submitted a PR for.
+The module for the elkington code is currently being pulled from [my branch][bill-elkington] instead of [Kevin Ohara's][kevinohara80] [offcial elkington repository][elkington] due to some enhancements and fixes that I've not yet submitted a PR for.
 
 ## License
 
