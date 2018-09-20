@@ -105,3 +105,6 @@ SOFTWARE.
 [kevinohara80]: https://github.com/kevinohara80
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2018.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-yellow.svg
+[releases-shield]: https://badge.fury.io/gh/billchurch%2Felkm1-mqtt.svg
+[releases]: https://github.com/billchurch/elkm1-mqtt/releases
+[license-shield]: https://img.shields.io/github/license/billchurch/elkm1-mqtt.svg
