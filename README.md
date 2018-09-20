@@ -30,7 +30,7 @@ npm start
 | ELK_PASSWORD         | Elk Password (if using ELK_SECURE)                                                   | no       |
 | ELK_HOST             | IP address of M1EXP.                                                                 | yes      |
 | ELK_PORT             | Port (2101 for plaintext, 2601 for TLS)                                              | no       |
-| ELK_SECURE           | TLS encryption, also requires ELK_USER / ELK_PASSWORD / ELK_PORT ('true','false')    | no       |
+| ELK_SECURE           | TLS encryption, also requires ELK_USER / ELK_PASSWORD / ELK_PORT (true, false)       | no       |
 | ELK_DEBUG            | Extra debug information for ELK (true, false)                                        | no       |
 | ELK_IGNORE_ZONES     | list of zones to ignore example (1 2 3 4 5 6 7 8)                                    | no       |
 | MQTT_BROKER_ADDRESS  | MQTT broker URL (eg. `mqtt://localhost:1883`)                                        | yes      |
