@@ -54,30 +54,47 @@ elk.on('authorized', () => {
   elkAuthorized = true
   debugElk(`${ts()} - elk authorized`)
   publishIt('elk/authorized', 'true')
+
+  function getZoneName (zone) {
+    setTimeout(function () {
+      elk.writesd('zone', zone)
+    }, (zone * 100))
+  }
+  // ok, timing is everything. I need to seperate these messages so they don't
+  // send to the M1EXP too fast and overload it. This is probably something that
+  // elkington should handle, a dispatcher bascially to control the flow and prevent
+  // the interface from getting clogged up. right now it "works" enough to get data
+  // back, need to figure out the best way to track the state of that zone data
+
   getActiveZones((zones) => {
     debugElk('zones: ' + JSON.stringify(zones))
     for (let zone in zones) {
       if (zones.hasOwnProperty(zone)) {
-        debugElk('zone: ' + zone + ' type: ' + zones[zone].type)
-        getZoneName(zone, (name) => {
-          debugElk('name: ' + name)
-        })
+        // debugElk('zone: ' + zone + ' type: ' + zones[zone].type)
+        // console.log('hello ', zone)
+        getZoneName(zone)
+        // getZoneName(zone, (name) => {
+        //   debugElk('name: ' + name)
+        // })
       }
     }
   })
 })
 
+elk.on('SD', (message) => {
+  debugElk(`${ts()} - elk zone: ${message.data.address}: ${message.data.text} `)
+})
 // need to figure this out, i think we're calling it too fast and the
 // M1EXP can't respond quick enough
-function getZoneName (zone, cb) {
-  elk.textDescriptionRequest('zone', zone, (err, msg) => {
-    if (err) {
-      handleElkError(err)
-    } else {
-      cb(msg.data.text)
-    }
-  })
-}
+// function getZoneName (zone, cb) {
+//   elk.textDescriptionRequest('zone', zone, (err, msg) => {
+//     if (err) {
+//       handleElkError(err)
+//     } else {
+//       cb(msg.data.text)
+//     }
+//   })
+// }
 
 function getActiveZones (cb) {
   elk.zoneDefinitionRequest((err, msg) => {
