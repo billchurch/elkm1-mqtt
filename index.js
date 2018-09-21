@@ -86,7 +86,7 @@ elk.on('authorized', () => {
   elk.writecmd('ka')
   setTimeout(function () {
     elk.writecmd('zp')
-  }, 100)
+  }, (myTimer += 100))
 
   // ok, timing is everything. I need to seperate these messages so they don't
   // send to the M1EXP too fast and overload it. This is probably something that
@@ -96,7 +96,7 @@ elk.on('authorized', () => {
   function getZoneName (zone) {
     setTimeout(function () {
       elk.writesd('zone', zone)
-    }, (zone * 100))
+    }, (myTimer += 100))
   }
   // myAreas.#.zone
   getActiveZones((zones) => {
