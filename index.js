@@ -20,8 +20,8 @@ var myZones = {}
 var myAreas = {}
 for (let area = 1; area <= 8; area++) {
   myAreas[area] = {}
-  myAreas[area].keypad = {}
-  myAreas[area].zone = {}
+  myAreas[area].keypads = []
+  myAreas[area].zones = []
   myAreas[area].ignore = (process.env.ELK_IGNORE_AREAS.split(' ').includes(String(area)))
 }
 
@@ -99,7 +99,7 @@ elk.on('authorized', () => {
 elk.on('KA', (msg) => {
   Object.keys(msg.data.keypad).map((kpNum) => {
     if (msg.data.keypad[kpNum].area !== 0) {
-      myAreas[msg.data.keypad[kpNum].area].keypad[kpNum] = { active: true }
+      myAreas[msg.data.keypad[kpNum].area].keypads.push(kpNum)
     }
   })
   debugElk(`${ts()} - elk myAreas ${JSON.stringify(myAreas)}`)
@@ -141,50 +141,9 @@ if (debugElk.enabled) {
   })
 }
 
-// function publishAreaConfig (areaData) {
-
-// {
-//   "name": "mqtt ${message.data.text}",
-//   "state_topic": "${mqtt_sensor_prefix}/zone_${message.data.address}/state",
-//   "value_template": "{{ value_json.state }}",
-//   "icon": "mdi:alarm-bell"
-// }
-
-//   let myConfig = {
-//     name:
-//   }
-
-//   // let myStatus = {
-//   //   'code_format': '[0-9]{4}([0-9]{2})?',
-//   //   'changed_by': null,
-//   //   'hidden': false,
-//   //   'Last Armed At': 1537545236.3499477,
-//   //   'Last Disarmed At': 1537545236.3710032,
-//   //   'Last User Number': [
-//   //     1
-//   //   ],
-//   //   'Last User At': 1537545234.3620234,
-//   //   'Last User Name': 'USER 1',
-//   //   'Last Keypad Number': 1,
-//   //   'Last Keypad Name': 'Keypad 01',
-//   //   'Readiness': 'Not ready to arm',
-//   //   'Arm Status': [
-//   //     'Disarmed'
-//   //   ],
-//   //   'Alarm': [
-//   //     'No alarm active'
-//   //   ],
-//   //   'friendly_name': 'Area 1'
-//   // }
-
-// }
-
 elk.on('AS', (msg) => {
   Object.keys(msg.data).map((area) => {
     if (msg.data.hasOwnProperty(area)) {
-      // fixme - want this to be an int but comes out as a string, which is fine
-      // however array input for ignoreAreas is also int as strings need to fix there
-      // too
       let areaNum = area.substring(4)
 
       if (myAreas[areaNum].ignore == false) {
@@ -198,6 +157,14 @@ elk.on('AS', (msg) => {
     }
   })
   debugElk(`${ts()} - elk myAreas: ${JSON.stringify(myAreas)}`)
+})
+
+elk.on('ZP', (msg) => {
+  for (let zone in msg.data) {
+    // myAreas[area].zones
+    myAreas[msg.data[zone]].zones.push(zone)
+  }
+  debugElk(`${ts()} elk - \r\n\r\n${JSON.stringify(myAreas)}\r\n\r\n`)
 })
 
 elk.on('ZC', (msg) => {
