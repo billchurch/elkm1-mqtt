@@ -1,6 +1,15 @@
 'use strict'
+/*
+ * elkm1-mqtt
+ *
+ * Copyright (c) 2018 Bill Church
+ * Licensed under MIT License (see LICENSE for more information)
+ *
+ */
+
 // TODO get discovery config publishes sorted
 // need to publish alarm panel information
+// work on a better timing function to not overwhelm the M1EXP
 
 // reference
 // https://www.home-assistant.io/components/alarm_control_panel.manual_mqtt/
@@ -21,6 +30,10 @@ debugMqtt.enabled = (/true/i).test(process.env.MQTT_DEBUG)
 
 const ts = () => new Date()
 
+// this starts a timer to be used throughout this code to help
+// buffer/slow down requests to the M1EXP so it's not overwhelmed
+// need imrpovements on this, perhaps in elkington module.
+var myTimer = 100
 var mClientConnected = false
 var elkConnected = false
 var elkAuthorized = false
