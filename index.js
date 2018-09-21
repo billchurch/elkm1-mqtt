@@ -1,4 +1,14 @@
 'use strict'
+// TODO get discovery config publishes sorted
+// need to publish alarm panel information
+
+// reference
+// https://www.home-assistant.io/components/alarm_control_panel.manual_mqtt/
+// https://www.home-assistant.io/components/alarm_control_panel.manual/
+// https://www.home-assistant.io/components/alarm_control_panel.mqtt/
+// https://www.home-assistant.io/components/binary_sensor.mqtt/
+// https://www.home-assistant.io/components/sensor.mqtt/
+
 const elknode = require('elkington')
 const mqtt = require('mqtt')
 const debugElk = require('debug')('elk')
@@ -6,7 +16,6 @@ const debugMqtt = require('debug')('mqtt')
 const mqtt_sensor_prefix = process.env.MQTT_SENSOR_PREFIX || 'homeassistant/sensor/alarm'
 const mqtt_area_prefix = process.env.MQTT_AREA_PREFIX || 'homeassistant/alarm_control_panel/alarm'
 
-// enable debug if set in .env
 debugElk.enabled = (/true/i).test(process.env.ELK_DEBUG)
 debugMqtt.enabled = (/true/i).test(process.env.MQTT_DEBUG)
 
@@ -16,7 +25,6 @@ var mClientConnected = false
 var elkConnected = false
 var elkAuthorized = false
 var myZones = {}
-
 var myAreas = {}
 for (let area = 1; area <= 8; area++) {
   myAreas[area] = {}
@@ -79,21 +87,32 @@ elk.on('authorized', () => {
   }
   // myAreas.#.zone
   getActiveZones((zones) => {
-    // debugElk('zones: ' + JSON.stringify(zones))
     for (let zone in zones) {
       if (zones.hasOwnProperty(zone)) {
         myZones[zone] = {}
         myZones[zone].type = zones[zone].type
         myZones[zone].name = ''
-        // debugElk('zone: ' + zone + ' type: ' + zones[zone].type)
-        // console.log('hello ', zone)
         getZoneName(zone)
-        // getZoneName(zone, (name) => {
-        //   debugElk('name: ' + name)
-        // })
       }
     }
   })
+})
+
+elk.on('AS', (msg) => {
+  Object.keys(msg.data).map((area) => {
+    if (msg.data.hasOwnProperty(area)) {
+      let areaNum = area.substring(4)
+      if (myAreas[areaNum].ignore == false) {
+        myAreas[areaNum].status = msg.data[area].armStatus
+        myAreas[areaNum].ready = msg.data[area].armStatus
+        debugMqtt(`${ts()} - publish: ${mqtt_area_prefix}/area_${areaNum}/status:`, msg.data[area].armStatus)
+        debugMqtt(`${ts()} - publish: ${mqtt_area_prefix}/area_${areaNum}/ready:`, (/^Ready/).test(msg.data[area].armUpState).toString())
+        publishIt(`${mqtt_area_prefix}/area_${areaNum}/status`, msg.data[area].armStatus)
+        publishIt(`${mqtt_area_prefix}/area_${areaNum}/ready`, (/^Ready/).test(msg.data[area].armUpState).toString())
+      }
+    }
+  })
+  debugElk(`${ts()} - elk myAreas: ${JSON.stringify(myAreas)}`)
 })
 
 elk.on('KA', (msg) => {
@@ -115,6 +134,31 @@ elk.on('SD', (msg) => {
   }
 })
 
+elk.on('ZC', (msg) => {
+  let zoneNumber = msg.data.zoneNumber
+  // publishIt('elk/zone/' + zoneNumber + '/status', (msg.data.zoneStatus.substr(0, msg.data.zoneStatus.indexOf(':'))))
+  let myState = '{ "state": "' + (msg.data.zoneStatus.substr(0, msg.data.zoneStatus.indexOf(':'))) + '" }'
+  debugMqtt(`${ts()} - publish: ${mqtt_sensor_prefix}/zone_` + zoneNumber + '/state: ' + myState)
+  publishIt(mqtt_sensor_prefix + '/zone_' + zoneNumber + '/state', myState, { retain: true })
+})
+
+elk.on('ZP', (msg) => {
+  for (let zone in msg.data) {
+    // myAreas[area].zones
+    myAreas[msg.data[zone]].zones.push(zone)
+  }
+  debugElk(`${ts()} elk - \r\n\r\n${JSON.stringify(myAreas)}\r\n\r\n`)
+})
+
+elk.on('error', handleElkError)
+
+elk.on('end', (msg) => {
+  console.log(`${ts()} - elk end: ` + JSON.stringify(msg))
+  setTimeout(() => {
+    process.exit()
+  }, 10000)
+})
+
 function getActiveZones (cb) {
   elk.zoneDefinitionRequest((err, msg) => {
     if (err) {
@@ -134,55 +178,6 @@ function getActiveZones (cb) {
 function getZoneDetail (zone) {
   elk.textDescriptionRequest('zone', zone)
 }
-
-if (debugElk.enabled) {
-  elk.on('any', (msg) => {
-    debugElk(`${ts()} any msg: ` + JSON.stringify(msg))
-  })
-}
-
-elk.on('AS', (msg) => {
-  Object.keys(msg.data).map((area) => {
-    if (msg.data.hasOwnProperty(area)) {
-      let areaNum = area.substring(4)
-
-      if (myAreas[areaNum].ignore == false) {
-        myAreas[areaNum].status = msg.data[area].armStatus
-        myAreas[areaNum].ready = msg.data[area].armStatus
-        debugMqtt(`${ts()} - publish: ${mqtt_area_prefix}/area_${areaNum}/status:`, msg.data[area].armStatus)
-        debugMqtt(`${ts()} - publish: ${mqtt_area_prefix}/area_${areaNum}/ready:`, (/^Ready/).test(msg.data[area].armUpState).toString())
-        publishIt(`${mqtt_area_prefix}/area_${areaNum}/status`, msg.data[area].armStatus)
-        publishIt(`${mqtt_area_prefix}/area_${areaNum}/ready`, (/^Ready/).test(msg.data[area].armUpState).toString())
-      }
-    }
-  })
-  debugElk(`${ts()} - elk myAreas: ${JSON.stringify(myAreas)}`)
-})
-
-elk.on('ZP', (msg) => {
-  for (let zone in msg.data) {
-    // myAreas[area].zones
-    myAreas[msg.data[zone]].zones.push(zone)
-  }
-  debugElk(`${ts()} elk - \r\n\r\n${JSON.stringify(myAreas)}\r\n\r\n`)
-})
-
-elk.on('ZC', (msg) => {
-  let zoneNumber = msg.data.zoneNumber
-  // publishIt('elk/zone/' + zoneNumber + '/status', (msg.data.zoneStatus.substr(0, msg.data.zoneStatus.indexOf(':'))))
-  let myState = '{ "state": "' + (msg.data.zoneStatus.substr(0, msg.data.zoneStatus.indexOf(':'))) + '" }'
-  debugMqtt(`${ts()} - publish: ${mqtt_sensor_prefix}/zone_` + zoneNumber + '/state: ' + myState)
-  publishIt(mqtt_sensor_prefix + '/zone_' + zoneNumber + '/state', myState, { retain: true })
-})
-
-elk.on('error', handleElkError)
-
-elk.on('end', (msg) => {
-  console.log(`${ts()} - elk end: ` + JSON.stringify(msg))
-  setTimeout(() => {
-    process.exit()
-  }, 10000)
-})
 
 function publishHandler (e) {
   if (e) {
@@ -213,44 +208,8 @@ function handleElkError (e) {
   }, 10000)
 }
 
-// AR: 'Alarm Reporting to Ethernet',
-// AS: 'Arming status report data',
-// AT: 'Ethernet Test to IP',
-// AZ: 'Alarm by zone reply',
-// CC: 'Control output change update',
-// CR: 'Custom value report data',
-// CS: 'Control output status report data',
-// CU: 'Change user code reply',
-// CV: 'Counter Value Data',
-// DS: 'Lighting Poll Response',
-// DK: 'Display KP LCD Data',
-// EM: 'Email Trigger to M1XEP',
-// IC: 'Send invalid user code digits',
-// IE: 'Installer program exited',
-// IP: 'M1XSP Insteon Program',
-// IR: 'M1XSP Insteon Read',
-// KA: 'Keypad areas report data',
-// KC: 'Keypad key change update',
-// KF: 'Function key pressed data',
-// LD: 'Log data with index',
-// LW: 'Reply temperature data',
-// PC: 'PLC change update',
-// PS: 'PLC status report data',
-// RE: 'Reset Ethernet Module',
-// RP: 'ELKRP connected',
-// RR: 'Real Time Clock Data',
-// SD: 'Text string description report data',
-// SS: 'System Trouble Status data',
-// ST: 'Temperature report data',
-// TC: 'Task change update',
-// TR: 'Thermostat data report',
-// UA: 'User code areas report data',
-// VN: 'Reply Version Number of M1',
-// XB: 'reserved by ELKRP',
-// XK: 'Request Ethernet test',
-// ZB: 'Zone bypass report data',
-// ZC: 'Zone change update',
-// ZD: 'Zone definition report data',
-// ZP: 'Zone partition report data',
-// ZS: 'Zone status report data',
-// ZV: 'Zone analog voltage data'
+if (debugElk.enabled) {
+  elk.on('any', (msg) => {
+    debugElk(`${ts()} any msg: ` + JSON.stringify(msg))
+  })
+}
