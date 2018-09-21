@@ -3,7 +3,9 @@ const elknode = require('elkington')
 const mqtt = require('mqtt')
 const debugElk = require('debug')('elk')
 const debugMqtt = require('debug')('mqtt')
-const mqtt_sensor_prefix = 'homeassistant/sensor/alarm'
+const mqtt_sensor_prefix = process.env.MQTT_SENSOR_PREFIX || 'homeassistant/sensor/alarm'
+const mqtt_area_prefix = process.env.MQTT_SENSOR_PREFIX || 'homeassistant/sensor/alarm'
+
 // enable debug if set in .env
 debugElk.enabled = (/true/i).test(process.env.ELK_DEBUG)
 debugMqtt.enabled = (/true/i).test(process.env.MQTT_DEBUG)
@@ -56,16 +58,16 @@ elk.on('authorized', () => {
   debugElk(`${ts()} - elk authorized`)
   publishIt('elk/authorized', 'true')
 
-  function getZoneName (zone) {
-    setTimeout(function () {
-      elk.writesd('zone', zone)
-    }, (zone * 100))
-  }
   // ok, timing is everything. I need to seperate these messages so they don't
   // send to the M1EXP too fast and overload it. This is probably something that
   // elkington should handle, a dispatcher bascially to control the flow and prevent
   // the interface from getting clogged up. right now it "works" enough to get data
   // back, need to figure out the best way to track the state of that zone data
+  function getZoneName (zone) {
+    setTimeout(function () {
+      elk.writesd('zone', zone)
+    }, (zone * 100))
+  }
 
   getActiveZones((zones) => {
     // debugElk('zones: ' + JSON.stringify(zones))
@@ -95,17 +97,6 @@ elk.on('SD', (message) => {
     publishIt(`${mqtt_sensor_prefix}/zone_${message.data.address}/config`, myConfig, { retain: true })
   }
 })
-// need to figure this out, i think we're calling it too fast and the
-// M1EXP can't respond quick enough
-// function getZoneName (zone, cb) {
-//   elk.textDescriptionRequest('zone', zone, (err, msg) => {
-//     if (err) {
-//       handleElkError(err)
-//     } else {
-//       cb(msg.data.text)
-//     }
-//   })
-// }
 
 function getActiveZones (cb) {
   elk.zoneDefinitionRequest((err, msg) => {
@@ -121,14 +112,6 @@ function getActiveZones (cb) {
       cb(zones)
     }
   })
-
-  // elk.textDescriptionRequest('zone', 48, function (err, msg) {
-  //   if (err) {
-  //     console.error(`${ts()} elk discovery err: ` + JSON.stringify(err))
-  //   } else {
-  //     console.log('discovery: ' + JSON.stringify(msg))
-  //   }
-  // })
 }
 
 function getZoneDetail (zone) {
@@ -149,9 +132,10 @@ elk.on('AS', (msg) => {
       // too
       let areaNum = area.substring(4)
       if (!ignoreZones.includes(areaNum)) {
-        debugMqtt(`${ts()} - publish: elk/area/` + areaNum + '/status: ' + msg.data[area].armStatus)
-        publishIt('elk/area/' + areaNum + '/status', msg.data[area].armStatus)
-        publishIt('elk/area/' + areaNum + '/ready', (/^Ready/).test(msg.data[area].armUpState).toString())
+        debugMqtt(`${ts()} - publish: ${mqtt_area_prefix}/area_${areaNum}/status:`, msg.data[area].armStatus)
+        debugMqtt(`${ts()} - publish: ${mqtt_area_prefix}/area_${areaNum}/ready:`, (/^Ready/).test(msg.data[area].armUpState).toString())
+        publishIt(`${mqtt_area_prefix}/area_${areaNum}/status`, msg.data[area].armStatus)
+        publishIt(`${mqtt_area_prefix}/area_${areaNum}/ready`, (/^Ready/).test(msg.data[area].armUpState).toString())
       }
     }
   })
