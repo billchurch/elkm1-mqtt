@@ -4,14 +4,11 @@ const mqtt = require('mqtt')
 const debugElk = require('debug')('elk')
 const debugMqtt = require('debug')('mqtt')
 const mqtt_sensor_prefix = process.env.MQTT_SENSOR_PREFIX || 'homeassistant/sensor/alarm'
-const mqtt_area_prefix = process.env.MQTT_SENSOR_PREFIX || 'homeassistant/sensor/alarm'
+const mqtt_area_prefix = process.env.MQTT_AREA_PREFIX || 'homeassistant/alarm_control_panel/alarm'
 
 // enable debug if set in .env
 debugElk.enabled = (/true/i).test(process.env.ELK_DEBUG)
 debugMqtt.enabled = (/true/i).test(process.env.MQTT_DEBUG)
-
-// fixme - want this array to be int but comes from env as string
-const ignoreZones = process.env.ELK_IGNORE_ZONES.split(' ')
 
 const ts = () => new Date()
 
@@ -19,6 +16,14 @@ var mClientConnected = false
 var elkConnected = false
 var elkAuthorized = false
 var myZones = {}
+
+var myAreas = {}
+for (let area = 1; area <= 8; area++) {
+  myAreas[area] = {}
+  myAreas[area].keypad = {}
+  myAreas[area].zone = {}
+  myAreas[area].ignore = (process.env.ELK_IGNORE_AREAS.split(' ').includes(String(area)))
+}
 
 const mClient = mqtt.connect(process.env.MQTT_BROKER_ADDRESS, {
   username: process.env.MQTT_USER,
@@ -57,6 +62,10 @@ elk.on('authorized', () => {
   elkAuthorized = true
   debugElk(`${ts()} - elk authorized`)
   publishIt('elk/authorized', 'true')
+  elk.writecmd('ka')
+  setTimeout(function () {
+    elk.writecmd('zp')
+  }, 100)
 
   // ok, timing is everything. I need to seperate these messages so they don't
   // send to the M1EXP too fast and overload it. This is probably something that
@@ -68,7 +77,7 @@ elk.on('authorized', () => {
       elk.writesd('zone', zone)
     }, (zone * 100))
   }
-
+  // myAreas.#.zone
   getActiveZones((zones) => {
     // debugElk('zones: ' + JSON.stringify(zones))
     for (let zone in zones) {
@@ -87,14 +96,22 @@ elk.on('authorized', () => {
   })
 })
 
-elk.on('SD', (message) => {
-  // debugElk(`${ts()} - elk zone: ${message.data.address}: ${message.data.text} `)
-  if (myZones[message.data.address].name == '') {
-    myZones[message.data.address].name = message.data.text
+elk.on('KA', (msg) => {
+  Object.keys(msg.data.keypad).map((kpNum) => {
+    if (msg.data.keypad[kpNum].area !== 0) {
+      myAreas[msg.data.keypad[kpNum].area].keypad[kpNum] = { active: true }
+    }
+  })
+  debugElk(`${ts()} - elk myAreas ${JSON.stringify(myAreas)}`)
+})
+
+elk.on('SD', (msg) => {
+  if (myZones[msg.data.address].name == '') {
+    myZones[msg.data.address].name = msg.data.text
     debugElk(`${ts()} - elk zone object: ` + JSON.stringify(myZones))
-    let myConfig = `{ "name": "mqtt ${message.data.text}", "state_topic": "${mqtt_sensor_prefix}/zone_${message.data.address}/state", "value_template": "{{ value_json.state }}", "icon": "mdi:alarm-bell" }`
+    let myConfig = `{ "name": "mqtt ${msg.data.text}", "state_topic": "${mqtt_sensor_prefix}/zone_${msg.data.address}/state", "value_template": "{{ value_json.state }}", "icon": "mdi:alarm-bell" }`
     debugElk(`${ts()} - elk zone myConfig: ` + JSON.stringify(myConfig))
-    publishIt(`${mqtt_sensor_prefix}/zone_${message.data.address}/config`, myConfig, { retain: true })
+    publishIt(`${mqtt_sensor_prefix}/zone_${msg.data.address}/config`, myConfig, { retain: true })
   }
 })
 
@@ -124,14 +141,55 @@ if (debugElk.enabled) {
   })
 }
 
+// function publishAreaConfig (areaData) {
+
+// {
+//   "name": "mqtt ${message.data.text}",
+//   "state_topic": "${mqtt_sensor_prefix}/zone_${message.data.address}/state",
+//   "value_template": "{{ value_json.state }}",
+//   "icon": "mdi:alarm-bell"
+// }
+
+//   let myConfig = {
+//     name:
+//   }
+
+//   // let myStatus = {
+//   //   'code_format': '[0-9]{4}([0-9]{2})?',
+//   //   'changed_by': null,
+//   //   'hidden': false,
+//   //   'Last Armed At': 1537545236.3499477,
+//   //   'Last Disarmed At': 1537545236.3710032,
+//   //   'Last User Number': [
+//   //     1
+//   //   ],
+//   //   'Last User At': 1537545234.3620234,
+//   //   'Last User Name': 'USER 1',
+//   //   'Last Keypad Number': 1,
+//   //   'Last Keypad Name': 'Keypad 01',
+//   //   'Readiness': 'Not ready to arm',
+//   //   'Arm Status': [
+//   //     'Disarmed'
+//   //   ],
+//   //   'Alarm': [
+//   //     'No alarm active'
+//   //   ],
+//   //   'friendly_name': 'Area 1'
+//   // }
+
+// }
+
 elk.on('AS', (msg) => {
   Object.keys(msg.data).map((area) => {
     if (msg.data.hasOwnProperty(area)) {
       // fixme - want this to be an int but comes out as a string, which is fine
-      // however array input for ignoreZones is also int as strings need to fix there
+      // however array input for ignoreAreas is also int as strings need to fix there
       // too
       let areaNum = area.substring(4)
-      if (!ignoreZones.includes(areaNum)) {
+
+      if (myAreas[areaNum].ignore == false) {
+        myAreas[areaNum].status = msg.data[area].armStatus
+        myAreas[areaNum].ready = msg.data[area].armStatus
         debugMqtt(`${ts()} - publish: ${mqtt_area_prefix}/area_${areaNum}/status:`, msg.data[area].armStatus)
         debugMqtt(`${ts()} - publish: ${mqtt_area_prefix}/area_${areaNum}/ready:`, (/^Ready/).test(msg.data[area].armUpState).toString())
         publishIt(`${mqtt_area_prefix}/area_${areaNum}/status`, msg.data[area].armStatus)
@@ -139,6 +197,7 @@ elk.on('AS', (msg) => {
       }
     }
   })
+  debugElk(`${ts()} - elk myAreas: ${JSON.stringify(myAreas)}`)
 })
 
 elk.on('ZC', (msg) => {
