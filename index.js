@@ -54,7 +54,58 @@ elk.on('authorized', () => {
   elkAuthorized = true
   debugElk(`${ts()} - elk authorized`)
   publishIt('elk/authorized', 'true')
+  getActiveZones((zones) => {
+    debugElk('zones: ' + JSON.stringify(zones))
+    for (let zone in zones) {
+      if (zones.hasOwnProperty(zone)) {
+        debugElk('zone: ' + zone + ' type: ' + zones[zone].type)
+        getZoneName(zone, (name) => {
+          debugElk('name: ' + name)
+        })
+      }
+    }
+  })
 })
+
+// need to figure this out, i think we're calling it too fast and the
+// M1EXP can't respond quick enough
+function getZoneName (zone, cb) {
+  elk.textDescriptionRequest('zone', zone, (err, msg) => {
+    if (err) {
+      handleElkError(err)
+    } else {
+      cb(msg.data.text)
+    }
+  })
+}
+
+function getActiveZones (cb) {
+  elk.zoneDefinitionRequest((err, msg) => {
+    if (err) {
+      handleElkError(err)
+    } else {
+      let zones = {}
+      Object.keys(msg.data.zone).map((zone) => {
+        if (msg.data.zone[zone] !== 'Disabled') {
+          zones[zone] = { type: msg.data.zone[zone] }
+        }
+      })
+      cb(zones)
+    }
+  })
+
+  // elk.textDescriptionRequest('zone', 48, function (err, msg) {
+  //   if (err) {
+  //     console.error(`${ts()} elk discovery err: ` + JSON.stringify(err))
+  //   } else {
+  //     console.log('discovery: ' + JSON.stringify(msg))
+  //   }
+  // })
+}
+
+function getZoneDetail (zone) {
+  elk.textDescriptionRequest('zone', zone)
+}
 
 if (debugElk.enabled) {
   elk.on('any', (msg) => {
