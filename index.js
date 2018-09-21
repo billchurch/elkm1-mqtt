@@ -3,7 +3,7 @@ const elknode = require('elkington')
 const mqtt = require('mqtt')
 const debugElk = require('debug')('elk')
 const debugMqtt = require('debug')('mqtt')
-
+const mqtt_sensor_prefix = 'homeassistant/sensor/alarm'
 // enable debug if set in .env
 debugElk.enabled = (/true/i).test(process.env.ELK_DEBUG)
 debugMqtt.enabled = (/true/i).test(process.env.MQTT_DEBUG)
@@ -16,6 +16,7 @@ const ts = () => new Date()
 var mClientConnected = false
 var elkConnected = false
 var elkAuthorized = false
+var myZones = {}
 
 const mClient = mqtt.connect(process.env.MQTT_BROKER_ADDRESS, {
   username: process.env.MQTT_USER,
@@ -67,9 +68,12 @@ elk.on('authorized', () => {
   // back, need to figure out the best way to track the state of that zone data
 
   getActiveZones((zones) => {
-    debugElk('zones: ' + JSON.stringify(zones))
+    // debugElk('zones: ' + JSON.stringify(zones))
     for (let zone in zones) {
       if (zones.hasOwnProperty(zone)) {
+        myZones[zone] = {}
+        myZones[zone].type = zones[zone].type
+        myZones[zone].name = ''
         // debugElk('zone: ' + zone + ' type: ' + zones[zone].type)
         // console.log('hello ', zone)
         getZoneName(zone)
@@ -82,7 +86,14 @@ elk.on('authorized', () => {
 })
 
 elk.on('SD', (message) => {
-  debugElk(`${ts()} - elk zone: ${message.data.address}: ${message.data.text} `)
+  // debugElk(`${ts()} - elk zone: ${message.data.address}: ${message.data.text} `)
+  if (myZones[message.data.address].name == '') {
+    myZones[message.data.address].name = message.data.text
+    debugElk(`${ts()} - elk zone object: ` + JSON.stringify(myZones))
+    let myConfig = `{ "name": "mqtt ${message.data.text}", "state_topic": "${mqtt_sensor_prefix}/zone_${message.data.address}/state", "value_template": "{{ value_json.state }}", "icon": "mdi:alarm-bell" }`
+    debugElk(`${ts()} - elk zone myConfig: ` + JSON.stringify(myConfig))
+    publishIt(`${mqtt_sensor_prefix}/zone_${message.data.address}/config`, myConfig, { retain: true })
+  }
 })
 // need to figure this out, i think we're calling it too fast and the
 // M1EXP can't respond quick enough
@@ -148,8 +159,10 @@ elk.on('AS', (msg) => {
 
 elk.on('ZC', (msg) => {
   let zoneNumber = msg.data.zoneNumber
-  debugMqtt(`${ts()} - publish: elk/zone/` + zoneNumber + '/status: ' + (msg.data.zoneStatus.substr(0, msg.data.zoneStatus.indexOf(':'))))
-  publishIt('elk/zone/' + zoneNumber + '/status', (msg.data.zoneStatus.substr(0, msg.data.zoneStatus.indexOf(':'))))
+  // publishIt('elk/zone/' + zoneNumber + '/status', (msg.data.zoneStatus.substr(0, msg.data.zoneStatus.indexOf(':'))))
+  let myState = '{ "state": "' + (msg.data.zoneStatus.substr(0, msg.data.zoneStatus.indexOf(':'))) + '" }'
+  debugMqtt(`${ts()} - publish: ${mqtt_sensor_prefix}/zone_` + zoneNumber + '/state: ' + myState)
+  publishIt(mqtt_sensor_prefix + '/zone_' + zoneNumber + '/state', myState, { retain: true })
 })
 
 elk.on('error', handleElkError)
@@ -171,7 +184,7 @@ function publishHandler (e) {
 function publishIt (topic, data, options) {
   // if mqtt broker is down, the publish will occur when it returns
   debugMqtt('publishing: ' + topic + ': ' + data)
-  mClient.publish(topic, data, publishHandler)
+  mClient.publish(topic, data, options, publishHandler)
 }
 
 function handleClientError (e) {
